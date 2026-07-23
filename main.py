@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 import pdfplumber
 import io
 import re
+import os
 
 app = FastAPI(
     title="🏛️ SGK Emekli Maaşı & Hak Kaybı Analiz Sistemi",
@@ -46,7 +47,6 @@ def python_analiz_motoru_calistir(df: pd.DataFrame, donem_ozetleri: dict, toplam
         
     # 2. Dönemsel Katkı Analizi (2008 Sonrası Düşüş Riski)
     donem_2008 = donem_ozetleri.get("2008_Sonrasi", {})
-    donem_99_08 = donem_ozetleri.get("1999_2008_Arasi", {})
     
     if donem_2008.get("gun", 0) > 0 and donem_2008.get("toplam_pek", 0) / max(1, donem_2008.get("gun", 1)) < 500:
         tespitler.append("📉 **Aylık Bağlanma Oranı (ABO) Düşüş Riski:** 2008 sonrası sistemde asgari ücretten yatırılan uzun süreli primler kök aylık ortalamanızı aşağı çekmiş olabilir.")
@@ -70,8 +70,10 @@ def python_analiz_motoru_calistir(df: pd.DataFrame, donem_ozetleri: dict, toplam
 # HTML Arayüzü
 @app.get("/", response_class=HTMLResponse, tags=["Web Arayüzü"])
 def home():
-    with open("index.html", "r", encoding="utf-8") as f:
-        return f.read()
+    if os.path.exists("index.html"):
+        with open("index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>🏛️ SGK Emekli Asistanı Aktif!</h1><p>Frontend (index.html) dosyası yüklenmeyi bekliyor.</p>"
 
 # PDF Oku Endpoint
 @app.post("/api/pdf-oku", tags=["SGK İşlemleri"])
