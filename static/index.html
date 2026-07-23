@@ -1,0 +1,167 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>SGK Emekli Asistanı - Mevzuat Gruplu Analiz</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .header-box { background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; padding: 30px 0; margin-bottom: 30px; }
+        .report-box { white-space: pre-wrap; background: #ffffff; padding: 20px; border-left: 5px solid #0d6efd; border-radius: 5px; }
+        .donem-header { background-color: #e9ecef; font-weight: bold; color: #0d6efd; font-size: 1.05rem; }
+        .val-sub { font-size: 0.82rem; color: #6c757d; display: block; }
+    </style>
+</head>
+<body>
+
+<div class="header-box text-center">
+    <h2>SGK Emekli Asistanı</h2>
+    <p class="mb-0">Mevzuat Dönemli Hizmet Dökümü Analizi ve Profesyonel Emeklilik Raporu</p>
+</div>
+
+<div class="container mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card p-4 mb-4">
+                <h5 class="card-title text-primary mb-3">e-Devlet SGK PDF Dosyası Yükleyin</h5>
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <label for="pdfFile" class="form-label">Barkodlu SGK Hizmet Dökümü (PDF)</label>
+                        <input class="form-control" type="file" id="pdfFile" accept=".pdf" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="apiKey" class="form-label">Gemini API Key (Opsiyonel)</label>
+                        <input type="password" class="form-control" id="apiKey" placeholder="AI Analiz için API Key girebilirsiniz">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2" id="submitBtn">Analiz Et ve Raporla</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="results" style="display:none;">
+        <div class="alert alert-info text-center" id="currencyNote"></div>
+
+        <div class="row text-center mb-4">
+            <div class="col-md-4">
+                <div class="card p-3 bg-primary text-white">
+                    <h6>Toplam Prim Gün</h6>
+                    <h3 id="resTotalGun">0</h3>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card p-3 bg-success text-white">
+                    <h6>Tahmini Kök Aylık</h6>
+                    <h3 id="resKokAylik">0 TL</h3>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card p-3 bg-warning text-dark">
+                    <h6>Ortalama ABO</h6>
+                    <h3 id="resAbo">%0</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4 mb-4">
+            <h5 class="card-title text-secondary mb-3">📜 Mevzuat Değişiklik Dönemlerine Göre Prim ve Kazanç Tablosu</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover text-center align-middle" id="matrixTable">
+                    <thead class="table-dark" id="matrixHeader"></thead>
+                    <tbody id="matrixBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <h5 class="card-title text-primary">📋 Uzman Analiz Raporu</h5>
+            <div class="report-box" id="resAiReport"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById("submitBtn");
+    submitBtn.disabled = true;
+    submitBtn.innerText = "İşleniyor...";
+
+    const formData = new FormData();
+    formData.append("file", document.getElementById("pdfFile").files[0]);
+    const apiKey = document.getElementById("apiKey").value;
+    if(apiKey) formData.append("gemini_api_key", apiKey);
+
+    try {
+        const response = await fetch("/pdf-yukle-ve-analiz-et", {
+            method: "POST",
+            body: formData
+        });
+        const data = await response.json();
+
+        if(data.success) {
+            document.getElementById("results").style.display = "block";
+            document.getElementById("currencyNote").innerText = data.para_birimi_notu;
+            document.getElementById("resTotalGun").innerText = data.hesaplama_sonucu.toplam_gun + " Gün";
+            document.getElementById("resKokAylik").innerText = data.hesaplama_sonucu.tahmini_kok_aylik + " TL";
+            document.getElementById("resAbo").innerText = "%" + data.hesaplama_sonucu.ortalama_abo;
+            document.getElementById("resAiReport").innerText = data.ai_uzman_raporu;
+
+            // Matris Tablosunu Gruplayarak Oluşturma
+            const donemler = data.pdf_ayristirilan_ozet.mevzuat_donem_matrisi || {};
+            const statuler = data.pdf_ayristirilan_ozet.statu_listesi || ["4A"];
+
+            // Header
+            const headerTR = document.createElement("tr");
+            headerTR.innerHTML = `<th>Mevzuat / Yıl</th>` + statuler.map(s => `<th>${s} (Gün / PEK Kazanç)</th>`).join("");
+            document.getElementById("matrixHeader").innerHTML = "";
+            document.getElementById("matrixHeader").appendChild(headerTR);
+
+            const body = document.getElementById("matrixBody");
+            body.innerHTML = "";
+
+            const donemIsimleri = {
+                "1999_ONCESI": "1. DÖNEM: 08.09.1999 ÖNCESİ MEVZUAT DÖNEMİ",
+                "1999_2008_ARASI": "2. DÖNEM: 09.09.1999 - 30.09.2008 ARASI MEVZUAT DÖNEMİ",
+                "2008_SONRASI": "3. DÖNEM: 01.10.2008 SONRASI (5510 SAYILI KANUN DÖNEMİ)"
+            };
+
+            Object.keys(donemIsimleri).forEach(dKey => {
+                const yillarData = donemler[dKey] || {};
+                const yillar = Object.keys(yillarData).sort();
+
+                if(yillar.length > 0) {
+                    // Mevzuat Dönemi Başlık Satırı
+                    body.innerHTML += `<tr class="donem-header"><td colspan="${statuler.length + 1}" class="text-start ps-3">${donemIsimleri[dKey]}</td></tr>`;
+
+                    yillar.forEach(yil => {
+                        let tr = `<tr><td class="fw-bold bg-light">${yil}</td>`;
+                        statuler.forEach(st => {
+                            if(yillarData[yil] && yillarData[yil][st]) {
+                                const gun = yillarData[yil][st].gun;
+                                const kazanc = yillarData[yil][st].kazanc.toLocaleString('tr-TR');
+                                tr += `<td><strong>${gun} Gün</strong><span class="val-sub">${kazanc} TRY</span></td>`;
+                            } else {
+                                tr += `<td class="text-muted">-</td>`;
+                            }
+                        });
+                        tr += `</tr>`;
+                        body.innerHTML += tr;
+                    });
+                }
+            });
+
+        } else {
+            alert("Hata: " + data.detail);
+        }
+    } catch(err) {
+        alert("Bağlantı hatası oluştu!");
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Analiz Et ve Raporla";
+    }
+});
+</script>
+</body>
+</html>

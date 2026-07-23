@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGK Emekli Asistanı - Maaş & Anomali Analiz Platformu</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .hero-section { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 12px; padding: 30px 20px; }
+        .card-custom { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .badge-donem { font-size: 0.85rem; padding: 6px 12px; border-radius: 20px; }
+        .donem-1999-oncesi { background-color: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; }
+        .donem-1999-2008 { background-color: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
+        .donem-2008-sonrasi { background-color: #e8f5e9; color: #1b5e20; border: 1px solid #c8e6c9; }
+        .anomali-card { border-left: 5px solid #ffc107; background-color: #fffde7; }
+        .basari-card { border-left: 5px solid #198754; background-color: #f1f8e9; }
+        .tehlike-card { border-left: 5px solid #dc3545; background-color: #fbe9e7; }
+        .table-responsive { max-height: 380px; overflow-y: auto; }
+    </style>
+</head>
+<body class="container py-4">
+
+    <div class="hero-section text-center mb-4">
+        <h1 class="fw-bold"><i class="fa-solid fa-scale-balanced me-2"></i>SGK Emekli Asistanı</h1>
+        <p class="lead mb-0">Hizmet Dökümü Analizi, Dönemsel Maaş Hesaplama ve Hak Kaybı Tespit Platformu</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card card-custom p-4">
+                <h5 class="fw-bold text-primary mb-3">
+                    <i class="fa-solid fa-file-arrow-up me-2"></i>1. e-Devlet SGK Hizmet Dökümü PDF Yükle
+                </h5>
+                <div class="row align-items-center">
+                    <div class="col-md-9">
+                        <input type="file" id="pdfFile" class="form-control form-control-lg" accept=".pdf">
+                    </div>
+                    <div class="col-md-3 mt-2 mt-md-0">
+                        <button class="btn btn-primary btn-lg w-100" onclick="pdfYukleAndAyristir()">
+                            <i class="fa-solid fa-magnifying-glass me-2"></i>PDF'i Ayrıştır
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12" id="tabloBolumu" style="display: none;">
+            <div class="card card-custom p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="fa-solid fa-table-list me-2"></i>2. Hizmet Satırları (Canlı Düzenleme & Ekleme)
+                    </h5>
+                    <div>
+                        <button class="btn btn-outline-success btn-sm me-2" onclick="yeniSatirEkle()">
+                            <i class="fa-solid fa-plus me-1"></i>Satır Ekle
+                        </button>
+                        <button class="btn btn-success fw-bold" onclick="maasHesaplaEngine()">
+                            <i class="fa-solid fa-calculator me-2"></i>Hesapla ve Analiz Et
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle" id="hizmetTable">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Yıl</th>
+                                <th>Ay</th>
+                                <th>Prim Gün</th>
+                                <th>PEK Kazanç (TL)</th>
+                                <th>SGK Dönemi</th>
+                                <th class="text-center">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hizmetTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12" id="sonucBolumu" style="display: none;">
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="card card-custom p-3 text-center border-start border-primary border-4">
+                        <small class="text-muted text-uppercase fw-bold">Toplam Prim Günü</small>
+                        <h2 class="fw-bold text-primary my-2" id="resToplamGun">0</h2>
+                        <small class="text-muted">Gün</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-custom p-3 text-center border-start border-success border-4">
+                        <small class="text-muted text-uppercase fw-bold">Tahmini Kök Aylık</small>
+                        <h2 class="fw-bold text-success my-2" id="resKokAylik">0.00 TL</h2>
+                        <small class="text-muted">Ek Ödeme Hariç</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-custom p-3 text-center border-start border-info border-4">
+                        <small class="text-muted text-uppercase fw-bold">Ele Geçen Tahmini Maaş</small>
+                        <h2 class="fw-bold text-info my-2" id="resEleGecen">0.00 TL</h2>
+                        <small class="text-muted">%4 Ek Ödeme Dahil</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-lg-7">
+                    <div class="card card-custom p-4 h-100">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-chart-pie me-2"></i>Dönemsel ABO ve Kısmi Aylık Dağılımı</h5>
+                        <div id="donemKartlari" class="row g-2"></div>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="card card-custom p-4 h-100">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-chart-column me-2"></i>Dönemsel Gün Dağılımı</h5>
+                        <div style="height: 220px;">
+                            <canvas id="donemChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-custom p-4">
+                <h5 class="fw-bold text-dark mb-3">
+                    <i class="fa-solid fa-user-shield me-2 text-warning"></i>Python Başmüfettiş Anomali & Hak Kaybı Raporu
+                </h5>
+                <div id="anomaliRaporListesi" class="d-flex flex-column gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let globalHizmetVerisi = [];
+        let donemChartInstance = null;
+
+        async function pdfYukleAndAyristir() {
+            const fileInput = document.getElementById('pdfFile');
+            if (!fileInput.files[0]) {
+                alert("Lütfen geçerli bir SGK Hizmet Dökümü PDF dosyası seçin.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/api/pdf-oku', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    globalHizmetVerisi = data.veri;
+                    tabloyuDoldur();
+                    document.getElementById('tabloBolumu').style.display = 'block';
+                }
+            } catch (err) {
+                alert("PDF dosyası işlenirken hata oluştu.");
+            }
+        }
+
+        function tabloyuDoldur() {
+            const tbody = document.getElementById('hizmetTbody');
+            tbody.innerHTML = '';
+
+            globalHizmetVerisi.forEach((item, index) => {
+                let badgeClass = 'donem-2008-sonrasi';
+                if(item.donem_kategorisi === '1999_Oncesi') badgeClass = 'donem-1999-oncesi';
+                else if(item.donem_kategorisi === '1999_2008_Arasi') badgeClass = 'donem-1999-2008';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="number" class="form-control form-control-sm" value="${item.yil}" onchange="satirGuncelle(${index}, 'yil', this.value)"></td>
+                        <td><input type="number" class="form-control form-control-sm" value="${item.ay}" onchange="satirGuncelle(${index}, 'ay', this.value)"></td>
+                        <td><input type="number" class="form-control form-control-sm" value="${item.gun}" onchange="satirGuncelle(${index}, 'gun', this.value)"></td>
+                        <td><input type="number" step="0.01" class="form-control form-control-sm" value="${item.pek_kazanc}" onchange="satirGuncelle(${index}, 'pek_kazanc', this.value)"></td>
+                        <td><span class="badge badge-donem ${badgeClass}">${item.donem_kategorisi}</span></td>
+                        <td class="text-center">
+                            <button class="btn btn-outline-danger btn-sm" onclick="satirSil(${index})">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function satirGuncelle(index, alan, deger) {
+            globalHizmetVerisi[index][alan] = parseFloat(deger) || 0;
+            if(alan === 'yil') {
+                const y = parseInt(deger);
+                if(y < 1999) globalHizmetVerisi[index].donem_kategorisi = "1999_Oncesi";
+                else if(y <= 2008) globalHizmetVerisi[index].donem_kategorisi = "1999_2008_Arasi";
+                else globalHizmetVerisi[index].donem_kategorisi = "2008_Sonrasi";
+                tabloyuDoldur();
+            }
+        }
+
+        function satirSil(index) {
+            globalHizmetVerisi.splice(index, 1);
+            tabloyuDoldur();
+        }
+
+        function yeniSatirEkle() {
+            globalHizmetVerisi.push({ yil: 2023, ay: 1, gun: 30, pek_kazanc: 20000.0, donem_kategorisi: '2008_Sonrasi' });
+            tabloyuDoldur();
+        }
+
+        async function maasHesaplaEngine() {
+            try {
+                const response = await fetch('/api/hesapla-ve-analiz-et', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hizmet_dokumu: globalHizmetVerisi })
+                });
+
+                const resData = await response.json();
+
+                document.getElementById('resToplamGun').innerText = resData.toplam_gun.toLocaleString('tr-TR');
+                document.getElementById('resKokAylik').innerText = resData.hesaplanan_kok_aylik.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL';
+                
+                const eleGecen = resData.hesaplanan_kok_aylik * 1.04;
+                document.getElementById('resEleGecen').innerText = eleGecen.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL';
+
+                const donemKartDiv = document.getElementById('donemKartlari');
+                donemKartDiv.innerHTML = '';
+                
+                const chartLabels = [];
+                const chartData = [];
+
+                for (const [key, val] of Object.entries(resData.donem_detaylari)) {
+                    chartLabels.push(key);
+                    chartData.push(val.gun);
+
+                    donemKartDiv.innerHTML += `
+                        <div class="col-12">
+                            <div class="p-3 border rounded bg-light d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="fw-bold text-dark">${key}</span>
+                                    <div class="small text-muted">Gün: ${val.gun} | ABO: %${val.abo}</div>
+                                </div>
+                                <div class="fw-bold text-primary fs-5">${val.kismi_aylik.toLocaleString('tr-TR')} TL</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                cizChart(chartLabels, chartData);
+
+                const anomaliDiv = document.getElementById('anomaliRaporListesi');
+                anomaliDiv.innerHTML = '';
+                
+                resData.analiz_sonuclari.forEach(item => {
+                    let cardType = 'anomali-card';
+                    if(item.includes('✅')) cardType = 'basari-card';
+                    else if(item.includes('🚨') || item.includes('📉')) cardType = 'tehlike-card';
+
+                    anomaliDiv.innerHTML += `
+                        <div class="p-3 rounded ${cardType} shadow-sm">
+                            <div class="mb-0 text-dark">${item}</div>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('sonucBolumu').style.display = 'block';
+                window.scrollTo({ top: document.getElementById('sonucBolumu').offsetTop - 20, behavior: 'smooth' });
+
+            } catch (err) {
+                alert("Maaş hesaplanırken hata oluştu.");
+            }
+        }
+
+        function cizChart(labels, data) {
+            const ctx = document.getElementById('donemChart').getContext('2d');
+            if (donemChartInstance) donemChartInstance.destroy();
+
+            donemChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#0d6efd', '#fd7e14', '#198754']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
