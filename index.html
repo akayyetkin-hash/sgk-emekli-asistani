@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGK Emekli Maaşı & Hak Kaybı Analiz Sistemi</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; text-align: center; }
+        .upload-box { border: 2px dashed #0056b3; padding: 20px; text-align: center; border-radius: 6px; background: #eef4fb; margin-top: 20px; }
+        button { background: #0056b3; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #004085; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏛️ SGK Emekli Maaşı & Hak Kaybı Analiz Sistemi</h1>
+        <p style="text-align: center;">Hizmet dökümü PDF dosyanızı yükleyerek kök aylığınızı hesaplayın ve olası hak kayıplarınızı tespit edin.</p>
+        
+        <div class="upload-box">
+            <input type="file" id="pdfFile" accept=".pdf"><br>
+            <button onclick="dosyaYukle()">Analiz Et ve Hesapla</button>
+        </div>
+
+        <h3>📊 Analiz Sonuçları:</h3>
+        <pre id="sonuc">Henüz bir analiz yapılmadı. Lütfen PDF yükleyin.</pre>
+    </div>
+
+    <script>
+        async function dosyaYukle() {
+            const fileInput = document.getElementById('pdfFile');
+            const sonucPre = document.getElementById('sonuc');
+
+            if (fileInput.files.length === 0) {
+                alert("Lütfen bir PDF dosyası seçin!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            sonucPre.textContent = "Analiz yapılıyor, lütfen bekleyin...";
+
+            try {
+                // Önce PDF'i okutup verileri alalım
+                const responsePdf = await fetch('/api/pdf-oku', {
+                    method: 'POST',
+                    body: formData
+                });
+                const dataPdf = await responsePdf.json();
+
+                if (responsePdf.ok) {
+                    // Alınan verilerle maaş hesaplama ve kural motorunu çalıştıralım
+                    const responseHesap = await fetch('/api/hesapla-ve-analiz-et', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ hizmet_dokumu: dataPdf.veri })
+                    });
+                    const dataHesap = await responseHesap.json();
+                    sonucPre.textContent = JSON.stringify(dataHesap, null, 2);
+                } else {
+                    sonucPre.textContent = "Hata: " + JSON.stringify(dataPdf);
+                }
+            } catch (error) {
+                sonucPre.textContent = "Bağlantı hatası: " + error;
+            }
+        }
+    </script>
+</body>
+</html>
